@@ -16,7 +16,8 @@ import (
 	"github.com/openshift/installer/pkg/terraform/stages/openstack"
 	"github.com/openshift/installer/pkg/terraform/stages/ovirt"
 	"github.com/openshift/installer/pkg/terraform/stages/powervs"
-	"github.com/openshift/installer/pkg/terraform/stages/vsphere"
+	//"github.com/openshift/installer/pkg/terraform/stages/vsphere"
+	"github.com/openshift/installer/pkg/infrastructure/vsphere"
 	alibabacloudtypes "github.com/openshift/installer/pkg/types/alibabacloud"
 	awstypes "github.com/openshift/installer/pkg/types/aws"
 	azuretypes "github.com/openshift/installer/pkg/types/azure"
@@ -61,7 +62,8 @@ func ProviderForPlatform(platform string) infrastructure.Provider {
 	case ovirttypes.Name:
 		return terraform.InitializeProvider(ovirt.PlatformStages)
 	case vspheretypes.Name:
-		return terraform.InitializeProvider(vsphere.PlatformStages)
+		//return terraform.InitializeProvider(vsphere.PlatformStages)
+		return vsphere.InitializeProvider()
 	case nonetypes.Name:
 		// terraform is not used when the platform is "none"
 		return terraform.InitializeProvider([]terraform.Stage{})
