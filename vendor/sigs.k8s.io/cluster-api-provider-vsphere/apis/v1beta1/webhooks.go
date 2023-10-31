@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 VMware, Inc. All Rights Reserved.
+Copyright 2021 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,12 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package version
+package v1beta1
 
-const (
-	// ClientName is the name of this SDK
-	ClientName = "govmomi"
-
-	// ClientVersion is the version of this SDK
-	ClientVersion = "0.30.7"
+import (
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 )
+
+func aggregateObjErrors(gk schema.GroupKind, name string, allErrs field.ErrorList) error {
+	if len(allErrs) == 0 {
+		return nil
+	}
+
+	return apierrors.NewInvalid(
+		gk,
+		name,
+		allErrs,
+	)
+}

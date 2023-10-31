@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 VMware, Inc. All Rights Reserved.
+Copyright 2021 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,12 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package version
-
-const (
-	// ClientName is the name of this SDK
-	ClientName = "govmomi"
-
-	// ClientVersion is the version of this SDK
-	ClientVersion = "0.30.7"
-)
+// Package v1beta1 contains API Schema definitions for the infrastructure v1beta1 API group
+// +kubebuilder:object:generate=true
+// +groupName=infrastructure.cluster.x-k8s.io
+package v1beta1

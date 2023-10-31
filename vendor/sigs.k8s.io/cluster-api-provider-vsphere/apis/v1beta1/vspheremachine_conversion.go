@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2022 VMware, Inc. All Rights Reserved.
+Copyright 2021 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,12 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package version
+package v1beta1
 
-const (
-	// ClientName is the name of this SDK
-	ClientName = "govmomi"
+// Hub marks VSphereMachine as a conversion hub.
+func (*VSphereMachine) Hub() {}
 
-	// ClientVersion is the version of this SDK
-	ClientVersion = "0.30.7"
-)
+// Hub marks VSphereMachineList as a conversion hub.
+func (*VSphereMachineList) Hub() {}
