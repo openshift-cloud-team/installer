@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	capa "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
+	capv "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -19,9 +20,11 @@ import (
 	"github.com/openshift/installer/pkg/asset/ignition/machine"
 	"github.com/openshift/installer/pkg/asset/installconfig"
 	"github.com/openshift/installer/pkg/asset/machines/aws"
+	"github.com/openshift/installer/pkg/asset/machines/vsphere"
 	"github.com/openshift/installer/pkg/asset/rhcos"
 	awstypes "github.com/openshift/installer/pkg/types/aws"
 	awsdefaults "github.com/openshift/installer/pkg/types/aws/defaults"
+	vspheretypes "github.com/openshift/installer/pkg/types/vsphere"
 )
 
 // Master generates the machines for the `master` machine pool.
@@ -56,6 +59,7 @@ func (m *CAPIMachine) Generate(dependencies asset.Parents) error {
 	installConfig := &installconfig.InstallConfig{}
 	rhcosImage := new(rhcos.Image)
 	mign := &machine.Master{}
+
 	dependencies.Get(clusterID, installConfig, rhcosImage, mign)
 
 	ic := installConfig.Config
@@ -194,6 +198,65 @@ func (m *CAPIMachine) Generate(dependencies asset.Parents) error {
 		}
 
 		m.Machines = append(m.Machines, bootstrapAWSMachine, bootstrapMachine)
+	case vspheretypes.Name:
+		templateName := clusterID.InfraID + "-rhcos"
+		mpool := defaultVSphereMachinePoolPlatform()
+
+		mpool.Set(ic.Platform.VSphere.DefaultMachinePlatform)
+		mpool.Set(pool.Platform.VSphere)
+
+		pool.Platform.VSphere = &mpool
+		vsphereMachines, machines, err := vsphere.VSphereMachines(
+			clusterID.InfraID,
+			installConfig.Config,
+			&pool,
+			templateName,
+			"master",
+			fmt.Sprintf("%s-%s", clusterID.InfraID, "master"),
+		)
+		if err != nil {
+			return errors.Wrap(err, "failed to create master machine objects")
+		}
+		m.Machines = append(m.Machines, vsphereMachines...)
+
+		// TODO(vincepri): The following code is almost duplicated from aws.AWSMachines.
+		// Refactor and generalize around a bootstrap pool, with a single machine and
+		// a custom openshift label to determine the bootstrap machine role, so we can
+		// delete the machine when the stage is complete.
+		bootstrapVSphereMachine := &capv.VSphereMachine{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf("%s-%s-bootstrap", clusterID.InfraID, pool.Name),
+				Labels: map[string]string{
+					"cluster.x-k8s.io/control-plane": "",
+				},
+			},
+			Spec: machines[0].Spec,
+		}
+
+		//bootstrapVSphereMachine.Spec.CustomVMXKeys["guestinfo.ignition.config.data"] =
+
+		bootstrapMachine := &capi.Machine{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: bootstrapVSphereMachine.Name,
+				Labels: map[string]string{
+					"cluster.x-k8s.io/control-plane": "",
+				},
+			},
+			Spec: capi.MachineSpec{
+				ClusterName: clusterID.InfraID,
+				Bootstrap: capi.Bootstrap{
+					DataSecretName: pointer.String(fmt.Sprintf("%s-%s", clusterID.InfraID, "bootstrap")),
+				},
+				InfrastructureRef: v1.ObjectReference{
+					APIVersion: "infrastructure.cluster.x-k8s.io/v1beta1",
+					Kind:       "VSphereMachine",
+					Name:       bootstrapVSphereMachine.Name,
+				},
+			},
+		}
+
+		m.Machines = append(m.Machines, bootstrapVSphereMachine, bootstrapMachine)
+
 	default:
 		return nil
 	}

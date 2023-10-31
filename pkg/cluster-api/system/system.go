@@ -164,6 +164,27 @@ func (c *System) Run(clusterID *installconfig.ClusterID, installConfig *installc
 	case ibmcloud.Name:
 	case nutanix.Name:
 	case vsphere.Name:
+		vcenters := installConfig.Config.VSphere.VCenters
+
+		controllers = append(controllers,
+			c.getInfrastructureController(
+				&providers.VSphere,
+				[]string{
+					"-v=2",
+					"--metrics-bind-addr=0",
+					"--health-addr={{suggestHealthHostPort}}",
+					"--webhook-port={{.WebhookPort}}",
+					"--webhook-cert-dir={{.WebhookCertDir}}",
+					"--leader-elect=false",
+				},
+				map[string]string{
+					"VSPHERE_USERNAME":                      vcenters[0].Username,
+					"VSPHERE_PASSWORD":                      vcenters[0].Password,
+					"EXP_KUBEADM_BOOTSTRAP_FORMAT_IGNITION": "true",
+					"EXP_CLUSTER_RESOURCE_SET":              "true",
+				},
+			),
+		)
 	default:
 		return fmt.Errorf("unsupported platform %q", platform)
 	}

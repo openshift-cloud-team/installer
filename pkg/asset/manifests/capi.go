@@ -12,6 +12,7 @@ import (
 	"k8s.io/utils/ptr"
 	capa "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 	capz "sigs.k8s.io/cluster-api-provider-azure/api/v1beta1"
+	capv "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -24,6 +25,7 @@ import (
 	"github.com/openshift/installer/pkg/asset/rhcos"
 	"github.com/openshift/installer/pkg/ipnet"
 	awstypes "github.com/openshift/installer/pkg/types/aws"
+	vspheretypes "github.com/openshift/installer/pkg/types/vsphere"
 )
 
 const (
@@ -98,6 +100,45 @@ func (c *ClusterAPI) Generate(dependencies asset.Parents) error {
 	}
 
 	switch platform {
+	case vspheretypes.Name:
+
+		vcenter := installConfig.Config.VSphere.VCenters[0]
+		vsphereCluster := &capv.VSphereCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      clusterID.InfraID,
+				Namespace: capiGuestsNamespace,
+			},
+			Spec: capv.VSphereClusterSpec{
+				Server: fmt.Sprintf("https://%s", vcenter.Server),
+				IdentityRef: &capv.VSphereIdentityReference{
+					Kind: capv.SecretKind,
+					Name: "vsphere-creds",
+				},
+			},
+		}
+		vsphereClusterFn := "01_vsphere-cluster.yaml"
+		c.Manifests = append(c.Manifests, Manifest{vsphereCluster, vsphereClusterFn})
+
+		vsphereCreds := &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "vsphere-creds",
+				Namespace: capiGuestsNamespace,
+			},
+			Data: make(map[string][]byte),
+		}
+
+		vsphereCredsFn := "01_vsphere-creds.yaml"
+		//username := base64.StdEncoding.EncodeToString([]byte(vcenter.Username))
+		//password := base64.StdEncoding.EncodeToString([]byte(vcenter.Password))
+		//vsphereCreds.Data[fmt.Sprintf("%s.username", vcenter.Server)] = []byte(vcenter.Username)
+		//vsphereCreds.Data[fmt.Sprintf("%s.password", vcenter.Server)] = []byte(vcenter.Password)
+		vsphereCreds.Data["username"] = []byte(vcenter.Username)
+		vsphereCreds.Data["password"] = []byte(vcenter.Password)
+		c.Manifests = append(c.Manifests, Manifest{vsphereCreds, vsphereCredsFn})
+
+		cluster.Spec.InfrastructureRef.APIVersion = "infrastructure.cluster.x-k8s.io/v1beta1"
+		cluster.Spec.InfrastructureRef.Kind = "VSphereCluster"
+
 	case awstypes.Name:
 		// Not sure if this is the best place to create IAM roles.
 		if err := aws.PutIAMRoles(clusterID.InfraID, installConfig); err != nil {
