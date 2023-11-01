@@ -43,7 +43,7 @@ func ProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (*machinev
 }
 
 func createConnections(config *types.InstallConfig) (map[string]*session.Session, error) {
-	var connections map[string]*session.Session
+	connections := make(map[string]*session.Session)
 	for _, v := range config.VSphere.VCenters {
 		params := session.NewParams().WithServer(v.Server).WithUserInfo(v.Username, v.Password)
 
