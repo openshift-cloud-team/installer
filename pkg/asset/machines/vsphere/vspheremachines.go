@@ -8,6 +8,7 @@ import (
 	"path"
 
 	"github.com/vmware/govmomi/object"
+	"github.com/vmware/govmomi/vapi/tags"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,12 +43,80 @@ func ProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (*machinev
 	return spec, nil
 }
 
-func createConnections(config *types.InstallConfig) (map[string]*session.Session, error) {
+func createClusterTagID(ctx context.Context, session *session.Session, clusterId string, config *types.InstallConfig) (string, error) {
+	tagManager := session.TagManager
+	categories, err := tagManager.GetCategories(ctx)
+	if err != nil {
+		return "", fmt.Errorf("unable to get tag categories: %v", err)
+	}
+
+	var clusterTagCategory *tags.Category
+	clusterTagCategoryName := fmt.Sprintf("openshift-%s", clusterId)
+	tagCategoryId := ""
+
+	for _, category := range categories {
+		if category.Name == clusterTagCategoryName {
+			clusterTagCategory = &category
+			tagCategoryId = category.ID
+			break
+		}
+	}
+
+	if clusterTagCategory == nil {
+		clusterTagCategory = &tags.Category{
+			Name:        clusterTagCategoryName,
+			Description: "Added by openshift-install do not remove",
+			Cardinality: "SINGLE",
+			AssociableTypes: []string{
+				"VirtualMachine",
+				"ResourcePool",
+				"Folder",
+				"Datastore",
+				"StoragePod",
+			},
+		}
+		tagCategoryId, err = tagManager.CreateCategory(ctx, clusterTagCategory)
+		if err != nil {
+			return "", fmt.Errorf("unable to create tag category: %v", err)
+		}
+	}
+
+	var categoryTag *tags.Tag
+	tagId := ""
+
+	categoryTags, err := tagManager.GetTagsForCategory(ctx, tagCategoryId)
+	if err != nil {
+		return "", fmt.Errorf("unable to get tags for category: %v", err)
+	}
+	for _, tag := range categoryTags {
+		if tag.Name == clusterId {
+			categoryTag = &tag
+			tagId = tag.ID
+			break
+		}
+	}
+
+	if categoryTag == nil {
+		categoryTag = &tags.Tag{
+			Description: "Added by openshift-install do not remove",
+			Name:        clusterId,
+			CategoryID:  tagCategoryId,
+		}
+		tagId, err = tagManager.CreateTag(ctx, categoryTag)
+		if err != nil {
+			return "", fmt.Errorf("unable to create tag: %v", err)
+		}
+	}
+
+	return tagId, nil
+}
+
+func createConnections(ctx context.Context, config *types.InstallConfig) (map[string]*session.Session, error) {
 	connections := make(map[string]*session.Session)
 	for _, v := range config.VSphere.VCenters {
 		params := session.NewParams().WithServer(v.Server).WithUserInfo(v.Username, v.Password)
 
-		tempConnection, err := session.GetOrCreate(context.Background(), params)
+		tempConnection, err := session.GetOrCreate(ctx, params)
 
 		if err != nil {
 			return nil, err
@@ -58,13 +127,13 @@ func createConnections(config *types.InstallConfig) (map[string]*session.Session
 }
 
 // Machines returns a list of machines for a machinepool.
-func VSphereMachines(clusterID string, config *types.InstallConfig, pool *types.MachinePool, osImage, role, userDataSecret string) ([]client.Object, []capv.VSphereMachine, error) {
+func VSphereMachines(ctx context.Context, clusterID string, config *types.InstallConfig, pool *types.MachinePool, osImage, role, userDataSecret string) ([]client.Object, []capv.VSphereMachine, error) {
 	machines, err := Machines(clusterID, config, pool, osImage, role, userDataSecret)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to retrieve machines: %w", err)
 	}
 
-	connections, err := createConnections(config)
+	connections, err := createConnections(ctx, config)
 
 	if err != nil {
 		return nil, nil, err
@@ -76,29 +145,25 @@ func VSphereMachines(clusterID string, config *types.InstallConfig, pool *types.
 	for _, machine := range machines {
 		providerSpec := machine.Spec.ProviderSpec.Value.Object.(*machinev1.VSphereMachineProviderSpec)
 
-		/*
-			clusterPath := providerSpec.Workspace.ResourcePool
-			lastElement := strings.LastIndex(clusterPath, "/")
-			if lastElement != -1 {
-				clusterPath = clusterPath[:lastElement]
-			}
-
-		*/
-
 		conn := connections[providerSpec.Workspace.Server]
 
-		rp, err := conn.Finder.ResourcePool(context.Background(), providerSpec.Workspace.ResourcePool)
+		tagId, err := createClusterTagID(ctx, conn, clusterID, config)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to get cluster tag ID: %v", err)
+		}
+
+		rp, err := conn.Finder.ResourcePool(ctx, providerSpec.Workspace.ResourcePool)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		clusterRef, err := rp.Owner(context.Background())
+		clusterRef, err := rp.Owner(ctx)
 
 		if err != nil {
 			return nil, nil, err
 		}
 
-		clusterObjRef, err := conn.Finder.ObjectReference(context.Background(), clusterRef.Reference())
+		clusterObjRef, err := conn.Finder.ObjectReference(ctx, clusterRef.Reference())
 		if err != nil {
 			return nil, nil, err
 		}
@@ -122,6 +187,9 @@ func VSphereMachines(clusterID string, config *types.InstallConfig, pool *types.
 				VirtualMachineCloneSpec: capv.VirtualMachineCloneSpec{
 					CustomVMXKeys: map[string]string{
 						"guestinfo.hostname": machine.Name,
+					},
+					TagIDs: []string{
+						tagId,
 					},
 					Network: capv.NetworkSpec{
 						Devices: []capv.NetworkDeviceSpec{

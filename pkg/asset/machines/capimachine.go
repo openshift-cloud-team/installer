@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -206,7 +207,10 @@ func (m *CAPIMachine) Generate(dependencies asset.Parents) error {
 		mpool.Set(pool.Platform.VSphere)
 
 		pool.Platform.VSphere = &mpool
+		timedContext, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
 		vsphereMachines, machines, err := vsphere.VSphereMachines(
+			timedContext,
 			clusterID.InfraID,
 			installConfig.Config,
 			&pool,

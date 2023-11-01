@@ -173,18 +173,18 @@ func provision(vsphereConfig *vsphere.Config, clusterConfig *tfvars.Config) erro
 		defer vcenterConnectionMap[v.Server].Logout()
 
 		// each vcenter needs a tag and tag category
-		categoryId, err := createTagCategory(vcenterConnectionMap[v.Server], clusterConfig.ClusterID)
-		if err != nil {
-			return err
-		}
+		/*		categoryId, err := createTagCategory(vcenterConnectionMap[v.Server], clusterConfig.ClusterID)
+				if err != nil {
+					return err
+				}
 
-		tempTag, err := createTag(vcenterConnectionMap[v.Server], clusterConfig.ClusterID, categoryId)
+				tempTag, err := createTag(vcenterConnectionMap[v.Server], clusterConfig.ClusterID, categoryId)
 
-		if err != nil {
-			return err
-		}
+				if err != nil {
+					return err
+				}
 
-		tagMap[v.Server] = tempTag
+				tagMap[v.Server] = tempTag*/
 	}
 
 	for _, fd := range vsphereConfig.FailureDomainMap {
@@ -334,37 +334,37 @@ func createFolder(fullpath string, vconn *VCenterConnection) (*object.Folder, er
 	return folder, err
 }
 
-func createTagCategory(vconn *VCenterConnection, clusterId string) (string, error) {
-	logrus.Infof("In createTagCategory")
-	categoryName := fmt.Sprintf("openshift-%s", clusterId)
+// func createTagCategory(vconn *VCenterConnection, clusterId string) (string, error) {
+// 	logrus.Infof("In createTagCategory")
+// 	categoryName := fmt.Sprintf("openshift-%s", clusterId)
 
-	category := tags.Category{
-		Name:        categoryName,
-		Description: "Added by openshift-install do not remove",
-		Cardinality: "SINGLE",
-		AssociableTypes: []string{
-			"VirtualMachine",
-			"ResourcePool",
-			"Folder",
-			"Datastore",
-			"StoragePod",
-		},
-	}
+// 	category := tags.Category{
+// 		Name:        categoryName,
+// 		Description: "Added by openshift-install do not remove",
+// 		Cardinality: "SINGLE",
+// 		AssociableTypes: []string{
+// 			"VirtualMachine",
+// 			"ResourcePool",
+// 			"Folder",
+// 			"Datastore",
+// 			"StoragePod",
+// 		},
+// 	}
 
-	return tags.NewManager(vconn.RestClient).CreateCategory(vconn.Context, &category)
-}
+// 	return tags.NewManager(vconn.RestClient).CreateCategory(vconn.Context, &category)
+// }
 
-func createTag(vconn *VCenterConnection, clusterId, categoryId string) (string, error) {
-	logrus.Infof("In createTag")
+// func createTag(vconn *VCenterConnection, clusterId, categoryId string) (string, error) {
+// 	logrus.Infof("In createTag")
 
-	tag := tags.Tag{
-		Description: "Added by openshift-install do not remove",
-		Name:        clusterId,
-		CategoryID:  categoryId,
-	}
+// 	tag := tags.Tag{
+// 		Description: "Added by openshift-install do not remove",
+// 		Name:        clusterId,
+// 		CategoryID:  categoryId,
+// 	}
 
-	return tags.NewManager(vconn.RestClient).CreateTag(vconn.Context, &tag)
-}
+// 	return tags.NewManager(vconn.RestClient).CreateTag(vconn.Context, &tag)
+// }
 
 func importRhcosOva(vconn *VCenterConnection, folder *object.Folder, cachedImage, clusterId, tagId, diskProvisioningType string, failureDomain typesvsphere.FailureDomain) (*object.VirtualMachine, error) {
 	logrus.Infof("In importRhcosOva")
