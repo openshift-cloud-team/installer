@@ -3,7 +3,6 @@ package vsphere
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,7 +25,6 @@ import (
 	"github.com/vmware/govmomi/vim25/soap"
 	"github.com/vmware/govmomi/vim25/types"
 
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	"github.com/openshift/installer/pkg/asset"
 	"github.com/openshift/installer/pkg/infrastructure"
 	"github.com/openshift/installer/pkg/tfvars"
@@ -89,6 +87,7 @@ func (p *VSphereInfrastructureProvider) ExtractHostAddresses(dir string, config 
 	return nil
 }
 
+/*
 const (
 	GuestInfoIgnitionData     = "guestinfo.ignition.config.data"
 	GuestInfoIgnitionEncoding = "guestinfo.ignition.config.data.encoding"
@@ -98,6 +97,8 @@ const (
 	GuestInfoNetworkKargs = "guestinfo.afterburn.initrd.network-kargs"
 	StealClock            = "stealclock.enable"
 )
+
+*/
 
 type VCenterConnection struct {
 	Client     *govmomi.Client
@@ -231,72 +232,76 @@ func provision(vsphereConfig *vsphere.Config, clusterConfig *tfvars.Config) erro
 		}
 
 	}
-	encodedMasterIgn := base64.StdEncoding.EncodeToString([]byte(clusterConfig.IgnitionMaster))
-	encodedBootstrapIgn := base64.StdEncoding.EncodeToString([]byte(clusterConfig.IgnitionBootstrap))
 
-	bootstrap := true
+	/*
+		encodedMasterIgn := base64.StdEncoding.EncodeToString([]byte(clusterConfig.IgnitionMaster))
+		encodedBootstrapIgn := base64.StdEncoding.EncodeToString([]byte(clusterConfig.IgnitionBootstrap))
 
-	for i := 0; i < len(vsphereConfig.ControlPlanes); i++ {
-		cp := vsphereConfig.ControlPlanes[i]
-		vcenterConnection := vcenterConnectionMap[cp.Workspace.Server]
+		bootstrap := true
 
-		vmName := fmt.Sprintf("%s-master-%d", clusterConfig.ClusterID, i)
+		for i := 0; i < len(vsphereConfig.ControlPlanes); i++ {
+			cp := vsphereConfig.ControlPlanes[i]
+			vcenterConnection := vcenterConnectionMap[cp.Workspace.Server]
 
-		encodedIgnition := encodedMasterIgn
+			vmName := fmt.Sprintf("%s-master-%d", clusterConfig.ClusterID, i)
 
-		if bootstrap {
-			if i == 0 {
-				encodedIgnition = encodedBootstrapIgn
-				vmName = fmt.Sprintf("%s-bootstrap", clusterConfig.ClusterID)
+			encodedIgnition := encodedMasterIgn
+
+			if bootstrap {
+				if i == 0 {
+					encodedIgnition = encodedBootstrapIgn
+					vmName = fmt.Sprintf("%s-bootstrap", clusterConfig.ClusterID)
+				}
+			}
+
+			task, err := clone(vcenterConnection, vmTemplateMap[cp.Template], cp, encodedIgnition, vmName, clusterConfig.ClusterDomain)
+			if err != nil {
+				return err
+			}
+
+			taskInfo, err := task.WaitForResult(vcenterConnection.Context, nil)
+			if err != nil {
+				return err
+			}
+
+			vmMoRef := taskInfo.Result.(types.ManagedObjectReference)
+			vm := object.NewVirtualMachine(vcenterConnection.Client.Client, vmMoRef)
+
+			err = attachTag(vcenterConnectionMap[cp.Workspace.Server], vmMoRef.Value, tagMap[cp.Workspace.Server])
+			if err != nil {
+				return err
+			}
+
+			datacenter, err := vcenterConnection.Finder.Datacenter(vcenterConnection.Context, cp.Workspace.Datacenter)
+
+			if err != nil {
+				return err
+			}
+
+			task, err = datacenter.PowerOnVM(vcenterConnection.Context, []types.ManagedObjectReference{vm.Reference()}, &types.OptionValue{
+				Key:   string(types.ClusterPowerOnVmOptionOverrideAutomationLevel),
+				Value: string(types.DrsBehaviorFullyAutomated),
+			})
+
+			if err != nil {
+				return err
+			}
+
+			_, err = task.WaitForResult(vcenterConnection.Context, nil)
+
+			if err != nil {
+				return err
+			}
+
+			if bootstrap {
+				if i == 0 {
+					bootstrap = false
+					i = -1
+				}
 			}
 		}
 
-		task, err := clone(vcenterConnection, vmTemplateMap[cp.Template], cp, encodedIgnition, vmName, clusterConfig.ClusterDomain)
-		if err != nil {
-			return err
-		}
-
-		taskInfo, err := task.WaitForResult(vcenterConnection.Context, nil)
-		if err != nil {
-			return err
-		}
-
-		vmMoRef := taskInfo.Result.(types.ManagedObjectReference)
-		vm := object.NewVirtualMachine(vcenterConnection.Client.Client, vmMoRef)
-
-		err = attachTag(vcenterConnectionMap[cp.Workspace.Server], vmMoRef.Value, tagMap[cp.Workspace.Server])
-		if err != nil {
-			return err
-		}
-
-		datacenter, err := vcenterConnection.Finder.Datacenter(vcenterConnection.Context, cp.Workspace.Datacenter)
-
-		if err != nil {
-			return err
-		}
-
-		task, err = datacenter.PowerOnVM(vcenterConnection.Context, []types.ManagedObjectReference{vm.Reference()}, &types.OptionValue{
-			Key:   string(types.ClusterPowerOnVmOptionOverrideAutomationLevel),
-			Value: string(types.DrsBehaviorFullyAutomated),
-		})
-
-		if err != nil {
-			return err
-		}
-
-		_, err = task.WaitForResult(vcenterConnection.Context, nil)
-
-		if err != nil {
-			return err
-		}
-
-		if bootstrap {
-			if i == 0 {
-				bootstrap = false
-				i = -1
-			}
-		}
-	}
+	*/
 
 	return nil
 }
@@ -553,6 +558,7 @@ func attachTag(vconn *VCenterConnection, vmMoRefValue, tagId string) error {
 	return nil
 }
 
+/*
 func getExtraConfig(vmName, clusterDomain, encodedIgnition string) []types.BaseOptionValue {
 	return []types.BaseOptionValue{
 		&types.OptionValue{
@@ -714,6 +720,8 @@ func getNetworkDevices(
 	})
 	return networkDevices, nil
 }
+
+*/
 
 /*
 func getNetworkDevicesByPath(vconn *VCenterConnection,
