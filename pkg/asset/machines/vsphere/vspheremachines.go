@@ -103,7 +103,7 @@ func VSphereMachines(clusterID string, config *types.InstallConfig, pool *types.
 			return nil, nil, err
 		}
 
-		networkName := path.Join(clusterObjRef.(object.ClusterComputeResource).InventoryPath, providerSpec.Network.Devices[0].NetworkName)
+		networkName := path.Join(clusterObjRef.(*object.ClusterComputeResource).InventoryPath, providerSpec.Network.Devices[0].NetworkName)
 
 		vsphereMachine := &capv.VSphereMachine{
 			TypeMeta: metav1.TypeMeta{
