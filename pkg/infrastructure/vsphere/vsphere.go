@@ -35,8 +35,7 @@ import (
 	typesvsphere "github.com/openshift/installer/pkg/types/vsphere"
 )
 
-type VSphereInfrastructureProvider struct {
-}
+type VSphereInfrastructureProvider struct{}
 
 func InitializeProvider() infrastructure.Provider {
 	return &VSphereInfrastructureProvider{}
@@ -675,13 +674,14 @@ func getNetworkDevices(
 	// in the ManagedObjectReference is a Value string vs a path
 	networkObject, err := vconn.Finder.ObjectReference(vconn.Context, networkObjRef)
 
-	var notFoundError *find.NotFoundError
+	// I am unsure we care about this scenario
+	//var notFoundError *find.NotFoundError
 	if err != nil {
-		if errors.As(err, &notFoundError) {
-			return getNetworkDevicesByPath(vconn, devices, machineProviderSpec)
-		} else {
-			return nil, err
-		}
+		//if errors.As(err, &notFoundError) {
+		//return getNetworkDevicesByPath(vconn, devices, machineProviderSpec)
+		//} else {
+		return nil, err
+		//}
 	}
 	var backing types.BaseVirtualDeviceBackingInfo
 
@@ -715,6 +715,7 @@ func getNetworkDevices(
 	return networkDevices, nil
 }
 
+/*
 func getNetworkDevicesByPath(vconn *VCenterConnection,
 	devices object.VirtualDeviceList,
 	machineProviderSpec *machinev1beta1.VSphereMachineProviderSpec) ([]types.BaseVirtualDeviceConfigSpec, error) {
@@ -761,7 +762,6 @@ func getNetworkDevicesByPath(vconn *VCenterConnection,
 		Operation: types.VirtualDeviceConfigSpecOperationAdd,
 	})
 
-	/*
 		device, err := object.EthernetCardTypes().CreateEthernetCard("vmxnet3", backing)
 		changed := device.(types.BaseVirtualEthernetCard).GetVirtualEthernetCard()
 
@@ -777,7 +777,7 @@ func getNetworkDevicesByPath(vconn *VCenterConnection,
 			Operation: types.VirtualDeviceConfigSpecOperationEdit,
 		})
 
-	*/
 	return networkDevices, nil
 
 }
+*/
