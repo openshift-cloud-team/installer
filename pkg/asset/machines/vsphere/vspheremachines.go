@@ -2,15 +2,19 @@
 package vsphere
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
+	"path"
 
-	machinev1 "github.com/openshift/api/machine/v1beta1"
+	"github.com/vmware/govmomi/object"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/cluster-api-provider-vsphere/pkg/session"
+
+	machinev1 "github.com/openshift/api/machine/v1beta1"
 
 	capv "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -38,11 +42,32 @@ func ProviderSpecFromRawExtension(rawExtension *runtime.RawExtension) (*machinev
 	return spec, nil
 }
 
+func createConnections(config *types.InstallConfig) (map[string]*session.Session, error) {
+	var connections map[string]*session.Session
+	for _, v := range config.VSphere.VCenters {
+		params := session.NewParams().WithServer(v.Server).WithUserInfo(v.Username, v.Password)
+
+		tempConnection, err := session.GetOrCreate(context.Background(), params)
+
+		if err != nil {
+			return nil, err
+		}
+		connections[v.Server] = tempConnection
+	}
+	return connections, nil
+}
+
 // Machines returns a list of machines for a machinepool.
 func VSphereMachines(clusterID string, config *types.InstallConfig, pool *types.MachinePool, osImage, role, userDataSecret string) ([]client.Object, []capv.VSphereMachine, error) {
 	machines, err := Machines(clusterID, config, pool, osImage, role, userDataSecret)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to retrieve machines: %w", err)
+	}
+
+	connections, err := createConnections(config)
+
+	if err != nil {
+		return nil, nil, err
 	}
 
 	var result []client.Object
@@ -51,11 +76,35 @@ func VSphereMachines(clusterID string, config *types.InstallConfig, pool *types.
 	for _, machine := range machines {
 		providerSpec := machine.Spec.ProviderSpec.Value.Object.(*machinev1.VSphereMachineProviderSpec)
 
-		clusterPath := providerSpec.Workspace.ResourcePool
-		lastElement := strings.LastIndex(clusterPath, "/")
-		if lastElement != -1 {
-			clusterPath = clusterPath[:lastElement]
+		/*
+			clusterPath := providerSpec.Workspace.ResourcePool
+			lastElement := strings.LastIndex(clusterPath, "/")
+			if lastElement != -1 {
+				clusterPath = clusterPath[:lastElement]
+			}
+
+		*/
+
+		conn := connections[providerSpec.Workspace.Server]
+
+		rp, err := conn.Finder.ResourcePool(context.Background(), providerSpec.Workspace.ResourcePool)
+		if err != nil {
+			return nil, nil, err
 		}
+
+		clusterRef, err := rp.Owner(context.Background())
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		clusterObjRef, err := conn.Finder.ObjectReference(context.Background(), clusterRef.Reference())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		networkName := path.Join(clusterObjRef.(object.ClusterComputeResource).InventoryPath, providerSpec.Network.Devices[0].NetworkName)
+
 		vsphereMachine := &capv.VSphereMachine{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "infrastructure.cluster.x-k8s.io/v1beta1",
@@ -77,7 +126,7 @@ func VSphereMachines(clusterID string, config *types.InstallConfig, pool *types.
 					Network: capv.NetworkSpec{
 						Devices: []capv.NetworkDeviceSpec{
 							{
-								NetworkName: fmt.Sprintf("%s/%s", clusterPath, providerSpec.Network.Devices[0].NetworkName),
+								NetworkName: networkName,
 								DHCP4:       true,
 							},
 						},
