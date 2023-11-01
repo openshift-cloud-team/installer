@@ -4,6 +4,7 @@ package vsphere
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	machinev1 "github.com/openshift/api/machine/v1beta1"
 	v1 "k8s.io/api/core/v1"
@@ -50,6 +51,11 @@ func VSphereMachines(clusterID string, config *types.InstallConfig, pool *types.
 	for _, machine := range machines {
 		providerSpec := machine.Spec.ProviderSpec.Value.Object.(*machinev1.VSphereMachineProviderSpec)
 
+		clusterPath := providerSpec.Workspace.ResourcePool
+		lastElement := strings.LastIndex(clusterPath, "/")
+		if lastElement != -1 {
+			clusterPath = clusterPath[:lastElement]
+		}
 		vsphereMachine := &capv.VSphereMachine{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "infrastructure.cluster.x-k8s.io/v1beta1",
@@ -70,12 +76,13 @@ func VSphereMachines(clusterID string, config *types.InstallConfig, pool *types.
 					},
 					Network: capv.NetworkSpec{
 						Devices: []capv.NetworkDeviceSpec{
-							capv.NetworkDeviceSpec{
-								NetworkName: providerSpec.Network.Devices[0].NetworkName,
+							{
+								NetworkName: fmt.Sprintf("%s/%s", clusterPath, providerSpec.Network.Devices[0].NetworkName),
 								DHCP4:       true,
 							},
 						},
 					},
+					Folder:       providerSpec.Workspace.Folder,
 					Template:     providerSpec.Template,
 					Datacenter:   providerSpec.Workspace.Datacenter,
 					Server:       providerSpec.Workspace.Server,
