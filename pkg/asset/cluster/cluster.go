@@ -117,7 +117,7 @@ func (c *Cluster) Generate(parents asset.Parents) (err error) {
 	platform := installConfig.Config.Platform.Name()
 	switch platform {
 	case typesaws.Name, typesazure.Name, typesvsphere.Name:
-		return c.generateClusterAPI(parents, installConfig, clusterID)
+		return c.generateClusterAPI(parents, installConfig, clusterID, terraformVariables)
 	default:
 		return c.generateTerraform(installConfig, clusterID, terraformVariables, platform)
 	}
@@ -142,7 +142,7 @@ func (c *Cluster) Load(f asset.FileFetcher) (found bool, err error) {
 	return false, nil
 }
 
-func (c *Cluster) generateClusterAPI(parents asset.Parents, installConfig *installconfig.InstallConfig, clusterID *installconfig.ClusterID) error {
+func (c *Cluster) generateClusterAPI(parents asset.Parents, installConfig *installconfig.InstallConfig, clusterID *installconfig.ClusterID, terraformVariables *TerraformVariables) error {
 	capiManifests := &manifests.ClusterAPI{}
 	capiMachines := &machines.CAPIMachine{}
 	bootstrapIgnAsset := &bootstrap.Bootstrap{}
@@ -156,6 +156,23 @@ func (c *Cluster) generateClusterAPI(parents asset.Parents, installConfig *insta
 		masterIgnAsset,
 		clusterKubeconfigAsset,
 	)
+
+	platform := installConfig.Config.Platform.Name()
+
+	// vSphere has pre-reqs that need to be executed
+	switch platform {
+	case typesvsphere.Name:
+		tfvarsFiles := []*asset.File{}
+		for _, file := range terraformVariables.Files() {
+			tfvarsFiles = append(tfvarsFiles, file)
+		}
+
+		provider := infra.ProviderForPlatform(platform)
+		_, err := provider.Provision(InstallDir, tfvarsFiles)
+		if err != nil {
+			return err
+		}
+	}
 
 	// Only need the objects--not the files.
 	manifests := []client.Object{}
