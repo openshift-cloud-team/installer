@@ -9740,6 +9740,8 @@ sigs.k8s.io/cluster-api-provider-azure/util/webhook
 # sigs.k8s.io/cluster-api-provider-vsphere v1.8.3
 ## explicit; go 1.20
 sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1
+sigs.k8s.io/cluster-api-provider-vsphere/pkg/constants
+sigs.k8s.io/cluster-api-provider-vsphere/pkg/session
 # sigs.k8s.io/controller-runtime v0.16.2 => github.com/vincepri/controller-runtime v0.15.0-beta.0.0.20231019000313-ebeba1cb6aa2
 ## explicit; go 1.20
 sigs.k8s.io/controller-runtime
